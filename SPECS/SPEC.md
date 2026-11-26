@@ -226,20 +226,22 @@ Other commands: `vvm smoke --changed-since <ref>` restricts the run to lessons w
 | Rule | Checks | Why |
 |------|--------|-----|
 | `notebook-header` | First line `# Databricks notebook source` | Otherwise not imported as a notebook |
-| `env-header` | `# /// script` block with `environment_version` = `course.toml` | Serverless environment pinned |
+| `env-header` | `# /// script` block with `environment_version` = `course.toml`, in every packaged notebook except `Includes/` (they inherit the caller's); a warning only under `setup/` | Serverless environment pinned |
 | `classroom-setup` | Every lesson `%run`s its `Classroom-Setup-x.y`, and that file exists | Cold start |
 | `check-your-work` | Every Demo/Lab calls `finish(` | Feedback + smoke test |
 | `no-create-catalog` | No `CREATE CATALOG` under `labs/` | Learner-created catalogs are dropped at their cleanup |
 | `no-gpu` | No GPU node types, `hardware_accelerator`, `GPU_` in packaged notebooks | Guidelines; no quota |
 | `no-runtime-download` | Under `labs/`, every `%pip install` / `pip install` installs only from `/Volumes/…` (`-r /Volumes/…/requirements.txt` or a wheel path there); flagged: bare package names, `git+`, `http(s)://`, `--index-url` / `--extra-index-url`. Also flagged: `urlopen`, `requests.get`, `curl`, `wget` to non-workspace hosts | Guidelines; reproducibility |
 | `no-hardcoded-identity` | No emails, `dbc-…` / `adb-…` hosts, tokens | Shared workspaces; secrets |
-| `agenda-links` | Every `$./…` link in AGENDA and lessons resolves to a packaged notebook | Broken links are the first thing students hit |
+| `agenda-links` | Every `$./…` link in AGENDA and lessons resolves to a packaged notebook or a folder of them | Broken links are the first thing students hit |
+| `run-targets` | Every `%run` target resolves to a packaged notebook | A broken `%run` fails the lesson at its first cell |
 | `pins` | Every asset in `course.toml` has a full commit/version, and appears in `VERSIONS.md` | Traceability |
 | `placeholders` | `{{…}}` used only from the known set | Render completeness |
 | `branding` | No "Databricks Academy" strings/logos when `branding = "neutral"` | Course rule |
-| `reference-material` | Nothing under `reference_dir` packaged or tracked | Copyright |
+| `reference-material` | Nothing under `reference_dir` packaged or tracked; warning if it isn't git-ignored | Copyright |
+| `course-toml` | Setup step notebooks and the entry notebook exist; steps declare `outputs`; `user_assets` complete | Setup steps can be skipped when done; the form's entry opens |
 
-Errors block `build`; warnings are printed. Each rule can be waived per file with a comment `# vvm: allow <rule> — <reason>`.
+Errors block `build`; warnings are printed. Each rule can be waived per file with a comment `# vvm: allow <rule> — <reason>`; a waiver without a reason is ignored, with a warning. Code rules skip markdown cells and Python comments, so a lesson can *say* "never `CREATE CATALOG`". `notebook-header` is an error for course notebooks and a warning under `setup/` (plain Python modules are allowed there, and skipped by the build).
 
 ### 7.5 Per-user assets — `Includes/_user_assets.py`
 
@@ -334,7 +336,8 @@ fe-vocareum-vending-machine-skill/
 │   │   └── manual-cfg-route.md         # §8.3 — reference only, nothing generated
 │   ├── templates/                      # files of §6 with {{course.*}} placeholders
 │   └── scripts/vvm.py                  # uv script: build, lint, install, smoke, cleanup, form, checklist, which
-├── evals/                              # §11
+├── evals/                              # §11 test 6 (trigger evals)
+├── tests/                              # §11 tests 3–4: pytest, with a fixture course in tests/fixtures/course
 ├── .github/workflows/check.yml         # §11 tests 3–4 on every push (§7.7)
 └── README.md
 ```

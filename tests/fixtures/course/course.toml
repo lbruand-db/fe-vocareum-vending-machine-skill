@@ -1,0 +1,25 @@
+[course]
+name = "Hello Vocareum"
+slug = "hello-vocareum"
+repo_url = "https://github.com/example/hello-vocareum"
+environment_version = "4"
+
+[data]
+catalog = "hello"
+schema = "trips"
+learner_group = "account users"
+
+[[setup.steps]]
+name = "data_load"
+notebook = "setup/00_data_load"
+outputs = ["trips"]
+
+[[assets]]
+name = "helper_lib"
+kind = "wheel"
+source = "https://github.com/example/helper-lib"
+ref = "0123456789abcdef0123456789abcdef01234567"
+
+[vocareum]
+lab_time_hours = 2
+setup_timeout_min = 30
