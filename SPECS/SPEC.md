@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Draft — 2026-11-23, revised 2026-11-26; decisions 1–7 and 9 taken (§12), 8 and 10 proposed |
+| **Status** | Draft — 2026-11-23, revised 2026-11-26; all decisions (§12) taken |
 | **Skill name** | `vocareum-vending-machine` |
 | **What** | A Claude Code skill that takes a field engineer from "I have notebooks / a topic" to "a tested course running on Vocareum through the Course Vending Machine" — and back again for each new version |
 | **Generalised from** | [`lbruand-db/mmf-workshop`](https://github.com/lbruand-db/mmf-workshop) at `de2c7c8` (2026-10-22): its build CLI, admin setup notebooks, lesson includes, Vocareum README, notes and test checklist |
@@ -371,9 +371,9 @@ fe-vocareum-vending-machine-skill/
 | 5 | Per-user assets | **Generalised** into `_user_assets.py` (§7.5) |
 | 6 | Grading | **Out** |
 | 7 | Primary target | **Vending Machine only; manual `.cfg` route as a reference doc** (2026-11-26) — `references/manual-cfg-route.md`, no `.cfg` or reaper generated; the skill points to it when learners create billable resources (§8.3). Rejected: dropping it entirely (loses the only answer to lab-end cleanup); generating `.cfg` + reaper (no recorded test on Vocareum); supporting both routes fully (double the build and test work for no current user) |
-| 8 | CI platform | **Proposed** (2026-11-26) — GitHub Actions templates; the stages are plain `vvm` commands, so another CI can call them the same way |
+| 8 | CI platform | **GitHub Actions** (2026-11-26) — workflow templates; the stages are plain `vvm` commands, so another CI can call them the same way |
 | 9 | Smoke in CI | **No** (2026-11-26) — a service principal on the FE dev workspaces isn't considered feasible, so CI never holds Databricks credentials. `vvm smoke` runs from the author's machine; its `SPECS/NOTES.md` entry is what the release workflow checks |
-| 10 | Release record | **Proposed** (2026-11-26) — a GitHub Release per version holds the exact zips uploaded to Vocareum, with `BUILD_INFO.json` and the checklist |
+| 10 | Release record | **GitHub Releases** (2026-11-26) — one release per version holds the exact zips uploaded to Vocareum, with `BUILD_INFO.json` and the checklist |
 
 ## 13. Risks and open questions
 
