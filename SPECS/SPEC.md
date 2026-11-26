@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Draft — 2026-11-23, revised 2026-11-26; decisions 1–6 taken (§12), 7–10 open or proposed |
+| **Status** | Draft — 2026-11-23, revised 2026-11-26; decisions 1–6 and 9 taken (§12), 7 open, 8 and 10 proposed |
 | **Skill name** | `vocareum-vending-machine` |
 | **What** | A Claude Code skill that takes a field engineer from "I have notebooks / a topic" to "a tested course running on Vocareum through the Course Vending Machine" — and back again for each new version |
 | **Generalised from** | [`lbruand-db/mmf-workshop`](https://github.com/lbruand-db/mmf-workshop) at `de2c7c8` (2026-10-22): its build CLI, admin setup notebooks, lesson includes, Vocareum README, notes and test checklist |
@@ -108,7 +108,7 @@ Each phase ends with a short report and, where something outward-facing or hard 
 ├── course.toml                         # single source of course settings (§7.1)
 ├── pyproject.toml                      # version only — the `vvm` CLI ships with the skill (§7.3)
 ├── README.md                           # for authors: build, test, deploy
-├── .github/workflows/                  # check.yml, smoke.yml (disabled until configured), release.yml (§7.7)
+├── .github/workflows/                  # check.yml, release.yml (§7.7)
 ├── tests/test_includes.py              # unit tests for the Includes helpers (§7.7)
 ├── labs/Source/en_us/
 │   ├── notebooks/                      # → <slug>-labs.zip, entry AGENDA
@@ -219,7 +219,7 @@ Generalises `mmf_workshop/cli.py`:
 - Write `dist/BUILD_INFO.json`; warn if dirty or the commit isn't on a remote branch.
 - `vvm which <build_id>` (journey D): resolve the commit, show `git log -1`, and the NOTES entry for that build.
 
-Other commands: `vvm smoke --changed-since <ref>` restricts the run to lessons whose files changed (§5 phase 8, §7.7); `vvm install --profile <p> [--email <e>]` (render to a temp dir, import with the SDK's `workspace.import_(format=SOURCE)`), `vvm smoke`, `vvm cleanup [--dry-run]`, `vvm form` (§8.1), `vvm checklist` (§9).
+Other commands: `vvm smoke --changed-since <ref>` restricts the run to lessons whose files changed (§5 phase 8); `vvm install --profile <p> [--email <e>]` (render to a temp dir, import with the SDK's `workspace.import_(format=SOURCE)`), `vvm smoke`, `vvm cleanup [--dry-run]`, `vvm form` (§8.1), `vvm checklist` (§9).
 
 **Packaging (decided):** the CLI ships inside the skill as a single-file [uv script](https://docs.astral.sh/uv/guides/scripts/) — `scripts/vvm.py` with a PEP 723 header (`requires-python = ">=3.11"` for `tomllib`, pinned `dependencies`, `[tool.uv] exclude-newer` for reproducible resolution) — always run as `uv run <skill>/scripts/vvm.py <command>`. uv is the only prerequisite: it fetches Python and the dependencies on first run, so a course repo doesn't depend on a published package and the course `pyproject.toml` only carries the version. Dependencies stay few: `databricks-sdk` for the workspace commands (`install`, `smoke`, `cleanup`; auth from `~/.databrickscfg` profiles, as the CLI does); everything else (zip, git, lint) uses the standard library.
 
@@ -264,13 +264,13 @@ New, not generalised: mmf-workshop has no CI (at `de2c7c8`: no `.github/`, no te
 | Stage | Trigger | Runs | Credentials |
 |-------|---------|------|-------------|
 | **check** | every push and PR | `vvm lint`, `vvm build`, unit tests (`tests/`); upload `dist/` as a workflow artifact | none |
-| **smoke** | manual (`workflow_dispatch`), optional | `vvm smoke --changed-since <last tested build>` then `vvm cleanup`; per-lesson PASS/FAIL and run URLs in the job summary | Databricks service principal on a dev workspace through GitHub OIDC federation — no long-lived token. Skipped with a notice when not configured |
-| **release** | tag `v<version>` | fail if the tag ≠ `pyproject.toml` version; `vvm build` (clean checkout, so no `.dirty`); `vvm checklist`; `vvm form` diff against `vocareum/config.json`; GitHub Release with `<slug>-labs.zip`, `<slug>-setup.zip`, `BUILD_INFO.json`, `CHECKLIST-<build_id>.md`, the form diff in the notes | `GITHUB_TOKEN` only |
+| **release** | tag `v<version>` | fail if the tag ≠ `pyproject.toml` version; warn if `SPECS/NOTES.md` has no passing smoke entry for this commit; `vvm build` (clean checkout, so no `.dirty`); `vvm checklist`; `vvm form` diff against `vocareum/config.json`; GitHub Release with `<slug>-labs.zip`, `<slug>-setup.zip`, `BUILD_INFO.json`, `CHECKLIST-<build_id>.md`, the form diff in the notes | `GITHUB_TOKEN` only |
 | **deploy** | manual | the user uploads the release's zips in the Vending Machine, saves `config.json`, runs the checklist (§5 phases 6–7) | — |
 
 - **Getting `vvm` in CI.** The CLI lives in the skill repo (decision 2), so workflows check out the skill at the commit pinned in `course.toml` (`[tooling] skill_ref`, written by the scaffold) and run `uv run <skill>/scripts/vvm.py …`. uv comes from `astral-sh/setup-uv`; every action is pinned to a commit SHA.
 - **Unit tests** (`tests/`, run with `uv run --with pytest pytest`): `_checks.finish()` output and exit JSON; `_common`'s `out` resolution order with fake widgets / `ops.meta` rows. To make this possible, the templates keep their logic in plain functions that receive `spark` / `dbutils` as arguments; the notebook cells only wire them up.
-- **Generated by the scaffold** (§6): `.github/workflows/{check,smoke,release}.yml` and `tests/test_includes.py`. The smoke workflow is generated disabled until the user configures the service principal.
+- **Smoke stays local** (decision 9): CI has no Databricks credentials. The author runs `vvm smoke` (optionally `--changed-since <last tested build>`) with their own CLI profile before tagging; it writes the result to `SPECS/NOTES.md`, which is committed and which the release workflow checks.
+- **Generated by the scaffold** (§6): `.github/workflows/{check,release}.yml` and `tests/test_includes.py`.
 - **The skill repo itself** has its own `check` workflow running §11 tests 3–4 (lint fixtures, build cases) on every push.
 
 ## 8. Creating the course
@@ -366,7 +366,7 @@ fe-vocareum-vending-machine-skill/
 | 6 | Grading | **Out** |
 | 7 | Primary target | **Open** — Vending Machine first; whether to keep the manual `.cfg` route (§8.3) at all is to decide |
 | 8 | CI platform | **Proposed** (2026-11-26) — GitHub Actions templates; the stages are plain `vvm` commands, so another CI can call them the same way |
-| 9 | Smoke in CI | **Open** — proposed: optional, manual trigger, service principal through OIDC; to confirm that a service principal is allowed on the FE dev workspaces, otherwise smoke stays a local command |
+| 9 | Smoke in CI | **No** (2026-11-26) — a service principal on the FE dev workspaces isn't considered feasible, so CI never holds Databricks credentials. `vvm smoke` runs from the author's machine; its `SPECS/NOTES.md` entry is what the release workflow checks |
 | 10 | Release record | **Proposed** (2026-11-26) — a GitHub Release per version holds the exact zips uploaded to Vocareum, with `BUILD_INFO.json` and the checklist |
 
 ## 13. Risks and open questions
@@ -379,7 +379,7 @@ fe-vocareum-vending-machine-skill/
 | No lab-end hook → learner resources leak and cost | *Allow lab to be stopped* off; learner README steers to serverless; checklist cleanup step; ask the app owners for a lab-end hook |
 | Over-generalising from one course | Test 2 with a toy course of a different shape before v1 |
 | Skill confused with FEVM | Trigger evals (test 6); explicit note in `SKILL.md` |
-| No service principal allowed on shared FE dev workspaces | Smoke workflow optional and generated disabled; `vvm smoke` from the author's machine is the default (§7.7) |
+| A release tagged without a smoke run (smoke is local only) | Release workflow warns when `SPECS/NOTES.md` has no passing smoke entry for the tagged commit; the Vocareum checklist (§9) is still required |
 
 ## 14. References
 
