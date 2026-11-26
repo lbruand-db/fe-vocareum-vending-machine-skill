@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Draft — 2026-11-23; decisions 1–6 taken (§12), 7 open |
+| **Status** | Draft — 2026-11-23, revised 2026-11-26; decisions 1–6 taken (§12), 7 open |
 | **Skill name** | `vocareum-vending-machine` |
 | **What** | A Claude Code skill that takes a field engineer from "I have notebooks / a topic" to "a tested course running on Vocareum through the Course Vending Machine" — and back again for each new version |
 | **Generalised from** | [`lbruand-db/mmf-workshop`](https://github.com/lbruand-db/mmf-workshop) at `de2c7c8` (2026-10-22): its build CLI, admin setup notebooks, lesson includes, Vocareum README, notes and test checklist |
@@ -29,7 +29,7 @@ With the skill, a user can:
 
 - **Vocareum Cloud Labs — Databricks.** Vocareum provisions real Databricks workspaces (AWS only) and redirects learners into them. Workspaces are **shared** up to *Max Users per Workspace*; Vocareum opens another one when full. One metastore per workspace, so shared data is loaded **per workspace** by a setup hook, never by hand.
 - **Learners are workspace users, not admins.** Each gets a per-user location (default: a user-owned schema in the `dbacademy` catalog; the platform publishes it in `<catalog>.ops.meta` with keys `catalog_name`, `schema_name`, `username`). Any catalog a learner creates is dropped at their cleanup — learner notebooks must never create catalogs.
-- **The Course Vending Machine** is a Databricks App that creates a Vocareum course from a form and generates its `config.json` (*View config.json*). URL in mmf-workshop `SPECS/NOTES.md`. It offers:
+- **The Course Vending Machine** is a Databricks App that creates a Vocareum course from a form and generates its `config.json` (*View config.json*). Its URL is recorded in the skill's `references/vending-machine-form.md` (originally noted in mmf-workshop `SPECS/NOTES.md`), so the skill doesn't depend on another repo. It offers:
   - **Lab Content**: a prepared archive (`.zip` of source notebooks) + entry notebook;
   - **Workspace setup**: an archive + entry notebook, run **once per workspace as a serverless job**, timeout 20 min by default, max 120;
   - **User Resources**: user catalog/schema mode, *Manage Schema*, auto-created personal cluster / SQL warehouse;
@@ -93,7 +93,7 @@ Each phase ends with a short report and, where something outward-facing or hard 
 
 **4. Build and lint.** `vvm lint` then `vvm build` (§7.3–7.4). Refuse to recommend uploading a dirty or unpushed build; say why.
 
-**5. Pre-test on a dev workspace.** `vvm install --profile <p>` imports rendered notebooks; `vvm smoke --profile <p>` runs `workspace_setup` into a test catalog/schema, then each lesson as a serverless job task (in a fresh order, to prove cold start), and collects the `_checks` JSON. Report PASS/FAIL per lesson with run URLs. Then `vvm cleanup` removes what the test created (tables, volumes, registered models — versions first —, experiments, jobs, folders), after listing it.
+**5. Pre-test on a dev workspace.** `vvm install --profile <p>` imports rendered notebooks; `vvm smoke --profile <p>` runs `workspace_setup` into a test catalog/schema, then each lesson as a serverless job task (in a fresh order, to prove cold start), and collects the `_checks` JSON. Report PASS/FAIL per lesson with run URLs, and append a dated entry to `SPECS/NOTES.md` with the build id and `setup_minutes: <n>` (the measured `workspace_setup` duration, read by `vvm form`, §8.1). Then `vvm cleanup` removes what the test created (tables, volumes, registered models — versions first —, experiments, jobs, folders), after listing it.
 
 **6. Create the course in the Vending Machine.** Produce the form sheet (§8.1) with values and reasons. The Vending Machine has no API (as of 2026-11-23), so the user fills the form from the sheet and **clicks Create**. Then save *View config.json* as `vocareum/config.json` and commit it.
 
@@ -106,7 +106,7 @@ Each phase ends with a short report and, where something outward-facing or hard 
 ```
 <course>/
 ├── course.toml                         # single source of course settings (§7.1)
-├── pyproject.toml                      # version; console script `vvm` (or vendored cli)
+├── pyproject.toml                      # version only — the `vvm` CLI ships with the skill (§7.3)
 ├── README.md                           # for authors: build, test, deploy
 ├── labs/Source/en_us/
 │   ├── notebooks/                      # → <slug>-labs.zip, entry AGENDA
@@ -179,14 +179,23 @@ kind = "wheel"                         # wheel | tarball | file | skill-bundle
 source = "https://github.com/databricks-industry-solutions/many-model-forecasting"
 ref = "322ef91b7002067f9f7c7c37e5ca3e9e8abb28b4"
 
+[[user_assets]]                        # optional; installed per learner by Classroom setup (§7.5)
+name = "genie_code_skill"
+staged = "skills/mmf"                  # folder in /Volumes/{catalog}/{schema}/assets/, staged by workspace_setup
+dest = ".assistant/skills/mmf"         # relative to /Users/{me}/
+templated = ["SKILL.md"]               # {{workspace_url}} / {{user_email}} filled at install
+keep_user_edits = true
+
 [vocareum]
 org = "Field Driven Enablement Labs"
 template = "Data Science"
 max_users_per_workspace = 50
 lab_time_hours = 4
-setup_timeout_min = 120
+setup_timeout_min = 120                # checked by `vvm form` against 2× the last measured setup time, max 120 (§8.1)
 allow_lab_stop = false
 ```
+
+Names used in this spec: `{source}` = `{data.catalog}.{data.schema}` (shared, read-only data, and the `course_build` table); `{reference}` = `{data.catalog}.{data.reference_schema}`; `out` = the learner's own catalog.schema, resolved at runtime by `_common` (§2.2).
 
 ### 7.2 Lesson conventions
 
@@ -200,7 +209,7 @@ Generalises `mmf_workshop/cli.py`:
 - Fail if `reference_dir` is tracked by git.
 - Validate that every packaged `.py` starts with `# Databricks notebook source`; skip and warn otherwise.
 - Render `{{…}}` placeholders: `course_name`, `version_number`, `build_id`, `commit`, `commit_url`, `built_on`, `dirty_note`.
-- `build_id = <pyproject version>+g<short commit>[.dirty]`, dirty from `git status --porcelain -- setup labs src pyproject.toml course.toml`.
+- `build_id = <pyproject version>+g<short commit>[.dirty]`, dirty from `git status --porcelain -- setup labs pyproject.toml course.toml`.
 - Write `dist/<slug>-labs.zip` (paths relative to `notebooks/`, so `%run ../Includes/…` and `$./` links resolve) and `dist/<slug>-setup.zip` (`setup/` + notebooks, paths relative to the repo root, so setup can `dbutils.notebook.run` lessons as reference runs). `instructor/` is never packaged.
 - Write `dist/BUILD_INFO.json`; warn if dirty or the commit isn't on a remote branch.
 - `vvm which <build_id>` (journey D): resolve the commit, show `git log -1`, and the NOTES entry for that build.
@@ -219,7 +228,7 @@ Other commands: `vvm install --profile <p> [--email <e>]` (render to a temp dir,
 | `check-your-work` | Every Demo/Lab calls `finish(` | Feedback + smoke test |
 | `no-create-catalog` | No `CREATE CATALOG` under `labs/` | Learner-created catalogs are dropped at their cleanup |
 | `no-gpu` | No GPU node types, `hardware_accelerator`, `GPU_` in packaged notebooks | Guidelines; no quota |
-| `no-runtime-download` | No `%pip install git+`, `pip install <pkg>` without staged requirements, `urlopen`/`requests.get` to public hosts under `labs/` | Guidelines; reproducibility |
+| `no-runtime-download` | Under `labs/`, every `%pip install` / `pip install` installs only from `/Volumes/…` (`-r /Volumes/…/requirements.txt` or a wheel path there); flagged: bare package names, `git+`, `http(s)://`, `--index-url` / `--extra-index-url`. Also flagged: `urlopen`, `requests.get`, `curl`, `wget` to non-workspace hosts | Guidelines; reproducibility |
 | `no-hardcoded-identity` | No emails, `dbc-…` / `adb-…` hosts, tokens | Shared workspaces; secrets |
 | `agenda-links` | Every `$./…` link in AGENDA and lessons resolves to a packaged notebook | Broken links are the first thing students hit |
 | `pins` | Every asset in `course.toml` has a full commit/version, and appears in `VERSIONS.md` | Traceability |
@@ -258,7 +267,7 @@ Prints the Vending Machine fields with values from `course.toml` and the reason 
 | | Vocareum Org | Field Driven Enablement Labs | Can't be moved later |
 | | Template | Data Science | *Genie Code* template adds *Consumer* entitlement |
 | Lab Content | Mode / File / Entry | Prepared archive / `dist/<slug>-labs.zip` / `AGENDA` | |
-| Workspace setup | Enabled / Source / Entry / Timeout | On / `dist/<slug>-setup.zip` / `setup/workspace_setup` / measured setup time × 2, max 120 | Default 20 min too short for data + reference runs |
+| Workspace setup | Enabled / Source / Entry / Timeout | On / `dist/<slug>-setup.zip` / `setup/workspace_setup` / `vocareum.setup_timeout_min` | Default 20 min too short for data + reference runs. `vvm form` warns if the value is below 2× the last measured setup time (`setup_minutes` in the latest `SPECS/NOTES.md` entry, written by `vvm smoke`), or above the 120 max |
 | User Resources | Catalog & Schema / Manage Schema / personal cluster | user-owned schema in `dbacademy` / On / Off | Lessons resolve `out` from `ops.meta`; serverless |
 | Data Sideload | — | Empty | `workspace_setup` loads data |
 
@@ -292,7 +301,7 @@ fe-vocareum-vending-machine-skill/
 │   ├── SKILL.md                        # triggers, the 9 phases, guardrails, when to read which reference
 │   ├── references/
 │   │   ├── platform.md                 # §2.1 facts, hooks, limits — dated, with sources
-│   │   ├── vending-machine-form.md     # §8.1, with screenshots if allowed
+│   │   ├── vending-machine-form.md     # app URL, §8.1 fields, with screenshots if allowed — dated
 │   │   ├── conventions.md              # §7.2 lesson skeleton and rules
 │   │   ├── known-gaps.md               # no user / lab-end hook, Consumer entitlement, ops.meta keys, …
 │   │   └── manual-cfg-route.md         # §8.3
