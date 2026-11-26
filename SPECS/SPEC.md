@@ -202,7 +202,7 @@ Names used in this spec: `{source}` = `{data.catalog}.{data.schema}` (shared, re
 
 ### 7.2 Lesson conventions
 
-Skeleton (from mmf-workshop `SPECS/RESTRUCTURE.md`): title and overview → *Before you start: compute* → *Classroom setup* (`%run ../Includes/Classroom-Setup-x.y`) → learning objectives → lettered sections → *Short on time?* (where a step is slow or agent-driven) → *Check your work* (`%run ../Includes/_checks`, `finish(...)`) → summary.
+Skeleton (from mmf-workshop `SPECS/RESTRUCTURE.md`): title and overview → *Before you start: compute* → learning objectives → *Classroom setup* (`%run ../Includes/Classroom-Setup-x.y`) → lettered sections → *Short on time?* (where a step is slow or agent-driven) → *Check your work* (`%run ../Includes/_checks`, `finish(...)`) → summary.
 
 Rules: every lesson can be entered cold; outputs only to `out`; shared data read-only; no hard-coded emails, catalogs or workspace URLs; no `%pip install` from the internet (staged requirements only); interactive widgets self-contained (`displayHTML`, no CDN). Lesson types: Lecture (no compute or light), Demo (instructor-led, can be the reference solution), Lab (learner does it), Appendix (optional).
 
