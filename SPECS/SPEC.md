@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Draft — 2026-11-23, revised 2026-11-26; decisions 1–6 and 9 taken (§12), 7 open, 8 and 10 proposed |
+| **Status** | Draft — 2026-11-23, revised 2026-11-26; decisions 1–7 and 9 taken (§12), 8 and 10 proposed |
 | **Skill name** | `vocareum-vending-machine` |
 | **What** | A Claude Code skill that takes a field engineer from "I have notebooks / a topic" to "a tested course running on Vocareum through the Course Vending Machine" — and back again for each new version |
 | **Generalised from** | [`lbruand-db/mmf-workshop`](https://github.com/lbruand-db/mmf-workshop) at `de2c7c8` (2026-10-22): its build CLI, admin setup notebooks, lesson includes, Vocareum README, notes and test checklist |
@@ -35,7 +35,7 @@ With the skill, a user can:
   - **User Resources**: user catalog/schema mode, *Manage Schema*, auto-created personal cluster / SQL warehouse;
   - Templates (*Data Science*, *Genie Code*, …), org, dates, lab time, *Allow lab to be stopped*.
   - **No per-user hook and no lab-end hook** (unlike the manual `.cfg` route, which has `user_setup` and `lab_end.py`).
-- **The manual route** (go/vocareum-lab-development): clone a template course, upload a `.cfg` + archives to `/voc/private/courseware/`, the learner README to `/voc/docs/README.md`, scripts to `/scripts/python/`. Never "save image". Kept as a secondary target (§8.3).
+- **The manual route** (go/vocareum-lab-development): clone a template course, upload a `.cfg` + archives to `/voc/private/courseware/`, the learner README to `/voc/docs/README.md`, scripts to `/scripts/python/`. Never "save image". Documented by the skill, not generated (§8.3).
 - **L&E guidelines:** minimum compute and data; shared read-only data in Unity Catalog; pre-create everything that isn't a learning objective; a learner `README.md`; shortcut slow tasks "like a cooking show"; **no GPUs**, no provisioned throughput serving, avoid third-party downloads and private-preview features that need enablement without an API; budget ≤ 3× the session length; automate setup and termination.
 
 ### 2.2 What mmf-workshop learned — and what generalises
@@ -51,7 +51,7 @@ With the skill, a user can:
 | Learner notebooks shouldn't download code from GitHub/PyPI | `workspace_setup` stages pinned wheels and assets in `/Volumes/{catalog}/{schema}/assets`; lessons `%pip install -r` from there; `setup/VERSIONS.md` | "Stage assets" step + `VERSIONS.md` template; lint rule `no-runtime-download` |
 | Setup timeout: default 20 min too short | Timeout 120; every setup step skips when its output exists (`force_reload` widget) | Idempotent step pattern; form value derived from measured setup time |
 | No per-user hook in the Vending Machine | Per-user install (the Genie Code skill) moved into each lesson's Classroom setup; `user_setup` kept as admin fallback | Optional "per-user asset" pattern: idempotent, version-marked, never fails the lesson |
-| No lab-end hook: learner-created jobs/clusters leak | *Allow lab to be stopped* off; `mmf_lab_end.py` kept for the `.cfg` route; manual check after tests | Same; reaper template for the `.cfg` route; leftovers listed by `vvm cleanup --dry-run` |
+| No lab-end hook: learner-created jobs/clusters leak | *Allow lab to be stopped* off; `mmf_lab_end.py` kept for the `.cfg` route; manual check after tests | Same; intake warning when learners create billable resources, pointing to the manual route doc (§8.3); leftovers listed by `vvm cleanup --dry-run` |
 | Learners need read access to shared data | `GRANT … TO 'account users'` in setup | Grant step from `course.toml` |
 | Which build is deployed? | `build_id` in `Version Info`, printed by every Classroom setup, a row in `{source}.course_build` per setup run, `dist/BUILD_INFO.json`; warnings if dirty or unpushed | Built into the build command (§7.3) |
 | *Genie Code* template adds the *Consumer* entitlement, which may block notebooks/jobs | Use *Data Science* | Default in the form sheet, with the reason |
@@ -62,9 +62,9 @@ With the skill, a user can:
 
 ## 3. Scope
 
-**In:** scaffolding, conventions, templates, build/lint/install CLI, CI workflows and release artifacts (§7.7), form values and `config.json` versioning, test checklist generation, dev-workspace smoke tests, redeploy workflow, the manual `.cfg` route as a secondary target.
+**In:** scaffolding, conventions, templates, build/lint/install CLI, CI workflows and release artifacts (§7.7), form values and `config.json` versioning, test checklist generation, dev-workspace smoke tests, redeploy workflow, a reference doc for the manual `.cfg` route (§8.3).
 
-**Out:** writing the course content itself (the skill scaffolds and checks; the author or another session writes lessons); grading/autograde (supported by the `.cfg` route, not by the Vending Machine form — decided: out); LTI/Docebo; course translation; creating Vocareum orgs or accounts; GPU courses.
+**Out:** writing the course content itself (the skill scaffolds and checks; the author or another session writes lessons); grading/autograde (supported by the `.cfg` route, not by the Vending Machine form — decided: out); LTI/Docebo; course translation; generating `.cfg` files or `lab_end` scripts for the manual route (§8.3); creating Vocareum orgs or accounts; GPU courses.
 
 ## 4. Triggers and user journeys
 
@@ -83,7 +83,7 @@ It must **not** trigger on FEVM requests ("deploy a demo workspace") — the FE 
 
 Each phase ends with a short report and, where something outward-facing or hard to undo happens, an explicit confirmation from the user.
 
-**0. Intake.** Ask only what can't be inferred (one `AskUserQuestion` round, ≤ 4 questions): course name; audience and length (drives *Lab Time*, ≈ 2× learner time); shared data (source, size, licence/attribution); does a lesson need a long-running step (→ reference run); does any lesson need GPU, Apps, Genie Code, model serving, classic clusters (→ flag against guidelines/known gaps); per-user assets (e.g. a Genie Code skill). Write the answers to `course.toml` (§7.1).
+**0. Intake.** Ask only what can't be inferred (one `AskUserQuestion` round, ≤ 4 questions): course name; audience and length (drives *Lab Time*, ≈ 2× learner time); shared data (source, size, licence/attribution); does a lesson need a long-running step (→ reference run); does any lesson need GPU, Apps, Genie Code, model serving, classic clusters (→ flag against guidelines/known gaps); do learners create jobs, clusters, endpoints or other billable resources (→ warn: no lab-end cleanup on the Vending Machine, §8.3); per-user assets (e.g. a Genie Code skill). Write the answers to `course.toml` (§7.1).
 
 **1. Scaffold.** Generate the repo layout (§6) from templates, filling names from `course.toml`. *Adopt mode* (journey B): move existing notebooks into `M0x - …/x.y <Type> - <Title>.py`, add the environment header, the Classroom setup cell and a *Check your work* stub to each; never delete the originals without confirmation.
 
@@ -130,9 +130,7 @@ Each phase ends with a short report and, where something outward-facing or hard 
 │   └── VERSIONS.md                     # every pin, where it is set, where it is staged
 ├── vocareum/
 │   ├── README.md                       # form values, what runs when, test, known gaps
-│   ├── config.json                     # saved from the Vending Machine after creation
-│   ├── courseware/<slug>.cfg           # manual route only
-│   └── scripts/python/<slug>_lab_end.py# manual route only
+│   └── config.json                     # saved from the Vending Machine after creation
 ├── SPECS/NOTES.md                      # dated test log: build id, workspace, results, timings
 └── dist/                               # build output, git-ignored
 ```
@@ -298,9 +296,17 @@ If `vocareum/config.json` exists, `vvm form` diffs the would-be settings against
 
 Creating a course is outward-facing (it provisions workspaces and costs money). The skill never clicks *Create Course* or uploads on its own; it prepares, the user confirms and submits.
 
-### 8.3 Manual `.cfg` route
+### 8.3 Manual `.cfg` route — reference only
 
-For courses cloned by hand: generate `vocareum/courseware/<slug>.cfg` (`content`, `workspace_setup`, `user_setup`, `admin_cluster_config`), and the `lab_end` reaper (standard library only: cancel runs, delete the learner's jobs, clusters, experiments). Upload instructions: `.cfg` + archives to `/voc/private/courseware/`, README to `/voc/docs/README.md`, scripts to `/scripts/python/`; End Lab Behavior *Terminate*; never save an image.
+Decided (§12 decision 7): the skill **documents** the manual route but generates nothing for it — no `.cfg`, no `lab_end` reaper. The only implementation (mmf-workshop, 2026-10-16) has no recorded test on Vocareum (its `NOTES.md`: "Not tested on a workspace yet"), and the skill doesn't ship untested code.
+
+`references/manual-cfg-route.md` covers: what the route is (clone a template course by copy; Course → Assignment → Part); the `.cfg` keys (`content`, `workspace_setup`, `user_setup`, `autograde`, `admin_cluster_config`, `cluster_config` / `warehouse_config`) and who runs them with which parameters; the hook scripts (`workspace_init`, `user_setup`, `lab_setup`, `lab_end`); upload paths (`.cfg` + archives to `/voc/private/courseware/`, README to `/voc/docs/README.md`, scripts to `/scripts/python/`); Part settings (End Lab Behavior *Terminate*, otherwise `lab_end` doesn't run); never save an image; and what a `lab_end` reaper must do (cancel runs, delete the learner's jobs, clusters, experiments). Dated, sourced from go/vocareum-lab-development and mmf-workshop `SPECS/VOCAREUM.md`, with mmf-workshop's untested `.cfg` and `mmf_lab_end.py` linked as examples.
+
+What carries over unchanged: the archives from `vvm build`, `setup/workspace_setup`, and `setup/user_setup` (generated anyway as the per-user admin fallback, §7.5).
+
+**When the skill points to it:** at intake (§5 phase 0), if learners create jobs, clusters or other billable resources, the skill warns that the Vending Machine has no lab-end hook to clean them up, recommends keeping *Allow lab to be stopped* off and steering learners to serverless, and mentions the manual route as the only way to get a `lab_end` hook.
+
+**Revisit (→ generate `.cfg` + reaper)** when a real course needs `lab_end` and can be tested on a manually cloned course, or when the Vending Machine owners decline to add a lab-end hook (§13).
 
 ## 9. Test checklist — `vvm checklist`
 
@@ -325,7 +331,7 @@ fe-vocareum-vending-machine-skill/
 │   │   ├── vending-machine-form.md     # app URL, §8.1 fields, with screenshots if allowed — dated
 │   │   ├── conventions.md              # §7.2 lesson skeleton and rules
 │   │   ├── known-gaps.md               # no user / lab-end hook, Consumer entitlement, ops.meta keys, …
-│   │   └── manual-cfg-route.md         # §8.3
+│   │   └── manual-cfg-route.md         # §8.3 — reference only, nothing generated
 │   ├── templates/                      # files of §6 with {{course.*}} placeholders
 │   └── scripts/vvm.py                  # uv script: build, lint, install, smoke, cleanup, form, checklist, which
 ├── evals/                              # §11
@@ -364,7 +370,7 @@ fe-vocareum-vending-machine-skill/
 | 4 | Distribution | **Standalone repo** now; FE Vibe marketplace plugin later (layout already compatible) |
 | 5 | Per-user assets | **Generalised** into `_user_assets.py` (§7.5) |
 | 6 | Grading | **Out** |
-| 7 | Primary target | **Open** — Vending Machine first; whether to keep the manual `.cfg` route (§8.3) at all is to decide |
+| 7 | Primary target | **Vending Machine only; manual `.cfg` route as a reference doc** (2026-11-26) — `references/manual-cfg-route.md`, no `.cfg` or reaper generated; the skill points to it when learners create billable resources (§8.3). Rejected: dropping it entirely (loses the only answer to lab-end cleanup); generating `.cfg` + reaper (no recorded test on Vocareum); supporting both routes fully (double the build and test work for no current user) |
 | 8 | CI platform | **Proposed** (2026-11-26) — GitHub Actions templates; the stages are plain `vvm` commands, so another CI can call them the same way |
 | 9 | Smoke in CI | **No** (2026-11-26) — a service principal on the FE dev workspaces isn't considered feasible, so CI never holds Databricks credentials. `vvm smoke` runs from the author's machine; its `SPECS/NOTES.md` entry is what the release workflow checks |
 | 10 | Release record | **Proposed** (2026-11-26) — a GitHub Release per version holds the exact zips uploaded to Vocareum, with `BUILD_INFO.json` and the checklist |
